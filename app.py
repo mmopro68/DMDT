@@ -53,7 +53,7 @@ strategy_option = st.sidebar.radio(
 # ==========================================
 @st.cache_data(ttl=3600)
 def load_stock_data(ticker_list, start, end):
-    # Đổi định dạng ngày sang YYYY-mm-dd phù hợp với vnstock v3
+    # Định dạng chuỗi ngày chuẩn YYYY-mm-dd cho thư viện vnstock
     start_str = start.strftime('%Y-%m-%d')
     end_str = end.strftime('%Y-%m-%d')
     
@@ -62,10 +62,10 @@ def load_stock_data(ticker_list, start, end):
     
     for i, ticker in enumerate(ticker_list):
         try:
-            # Gọi hàm với tham số chuẩn hóa của bản 3.0.1
+            # Gọi hàm lấy dữ liệu lịch sử chuẩn hóa theo bản vnstock v3.0.1
             df = stock_historical_data(symbol=ticker, start_date=start_str, end_date=end_str, resolution='1D', type='stock')
             if not df.empty:
-                # Bản 3.0.1 trả về cột ngày có tên là 'time' hoặc 'date'
+                # Kiểm tra và xử lý đồng bộ tên cột thời gian (hệ thống lúc trả về time, lúc trả về date)
                 if 'time' in df.columns:
                     df['time'] = pd.to_datetime(df['time'])
                     df = df.set_index('time')
@@ -74,7 +74,7 @@ def load_stock_data(ticker_list, start, end):
                     df = df.set_index('date')
                     
                 df = df.sort_index()
-                # Ép kiểu dữ liệu giá đóng cửa về dạng số float
+                # Ép giá đóng cửa về kiểu số thực Float để tránh lỗi định dạng chuỗi văn bản
                 close_prices[ticker] = pd.to_numeric(df['close'], errors='coerce')
         except Exception as e:
             continue
@@ -82,7 +82,6 @@ def load_stock_data(ticker_list, start, end):
     
     progress_bar.empty()
     return pd.DataFrame(close_prices).dropna(how='all')
-
 # ==========================================
 # 5. LOGIC XỬ LÝ CHÍNH KHI BẤM NÚT CHẠY
 # ==========================================
