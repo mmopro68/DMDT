@@ -60,7 +60,7 @@ strategy_option = st.sidebar.radio(
 )
 
 # ==========================================
-# 4. HÀM TẢI DỮ LIỆU TỪ VNSTOCK (BẢN 0.2.8.8)
+# 4. HÀM TẢI DỮ LIỆU TỪ VNSTOCK (ĐÃ CHUẨN HÓA ĐỒNG BỘ INDEX)
 # ==========================================
 @st.cache_data(ttl=3600)
 def load_stock_data(ticker_list, start, end):
@@ -74,19 +74,37 @@ def load_stock_data(ticker_list, start, end):
         try:
             df = stock_historical_data(symbol=ticker, start_date=start_str, end_date=end_str, resolution='1D', type='stock')
             if df is not None and not df.empty:
-                if 'time' in df.columns:
-                    df['time'] = pd.to_datetime(df['time'])
-                    df = df.set_index('time')
-                df = df.sort_index()
-                close_prices[ticker] = pd.to_numeric(df['close'], errors='coerce')
-        except:
+                # 1. Xác định chính xác cột chứa ngày tháng
+                date_col = 'time' if 'time' in df.columns else ('date' if 'date' in df.columns else None)
+                
+                if date_col:
+                    # 2. Chuyển đổi ngày tháng về dạng chuỗi văn bản 'YYYY-MM-DD' để triệt tiêu lệch múi giờ (Timezone)
+                    df[date_col] = pd.to_datetime(df[date_col]).dt.strftime('%Y-%m-%d')
+                    
+                    # 3. Loại bỏ trùng lặp nếu có và thiết lập Index
+                    df = df.drop_duplicates(subset=[date_col])
+                    df = df.set_index(date_col)
+                    df = df.sort_index()
+                    
+                    # 4. Trích xuất giá đóng cửa và ép kiểu số, gán vào dictionary theo dạng Series
+                    close_prices[ticker] = pd.to_numeric(df['close'], errors='coerce')
+        except Exception as e:
             continue
         progress_bar.progress((i + 1) / len(ticker_list), text=f"Đang phân tích kỹ thuật mã: {ticker}")
     
     progress_bar.empty()
+    
     if not close_prices:
         return pd.DataFrame()
-    return pd.DataFrame(close_prices).dropna(how='all')
+        
+    # 5. Khởi tạo DataFrame từ dict các Series, Pandas sẽ tự động điền NaN vào những ngày bị lệch mà không gây lỗi ma trận
+    df_final = pd.DataFrame(close_prices)
+    
+    # 6. Chuyển Index trở lại dạng Datetime để vẽ biểu đồ tăng trưởng mượt mà ở các bước sau
+    df_final.index = pd.to_datetime(df_final.index)
+    df_final = df_final.sort_index()
+    
+    return df_final.dropna(how='all')
 
 # ==========================================
 # 5. LOGIC XỬ LÝ CHÍNH KHI BẤM NÚT CHẠY
