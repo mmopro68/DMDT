@@ -1,6 +1,3 @@
-### 3. File `app.py`
-*Tạo một file đặt tên là `app.py`. Đây là file mã nguồn trung tâm điều khiển toàn bộ giao diện tương tác và thuật toán phân tích của Web App:*
-
 ```python
 import streamlit as st
 import pandas as pd
