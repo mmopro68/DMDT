@@ -49,23 +49,22 @@ strategy_option = st.sidebar.radio(
 )
 
 # ==========================================
-# 4. HÀM TẢI DỮ LIỆU TỪ VNSTOCK (ĐÃ ĐỒNG BỘ CHO BẢN 3.0.1)
+# 4. HÀM TẢI DỮ LIỆU TỪ VNSTOCK (CẬP NHẬT CHUẨN VNSTOCK V3 ĐỂ SỬA LỖI)
 # ==========================================
 @st.cache_data(ttl=3600)
 def load_stock_data(ticker_list, start, end):
-    # Định dạng chuỗi ngày chuẩn YYYY-mm-dd cho thư viện vnstock
     start_str = start.strftime('%Y-%m-%d')
     end_str = end.strftime('%Y-%m-%d')
     
     close_prices = {}
-    progress_bar = st.progress(0, text="Đang kết nối dữ liệu VNSTOCK...")
+    progress_bar = st.progress(0, text="Đang kết nối dữ liệu VNSTOCK V3...")
     
     for i, ticker in enumerate(ticker_list):
         try:
-            # Gọi hàm lấy dữ liệu lịch sử chuẩn hóa theo bản vnstock v3.0.1
-            df = stock_historical_data(symbol=ticker, start_date=start_str, end_date=end_str, resolution='1D', type='stock')
+            # SỬA LỖI TẠI ĐÂY: Khởi tạo đối tượng Vnstock() trước khi gọi hàm lấy dữ liệu lịch sử
+            df = Vnstock().stock_historical_data(symbol=ticker, start_date=start_str, end_date=end_str, resolution='1D', type='stock')
             if not df.empty:
-                # Kiểm tra và xử lý đồng bộ tên cột thời gian (hệ thống lúc trả về time, lúc trả về date)
+                # Đồng bộ hóa định dạng cột ngày tháng của Vnstock V3
                 if 'time' in df.columns:
                     df['time'] = pd.to_datetime(df['time'])
                     df = df.set_index('time')
@@ -74,7 +73,7 @@ def load_stock_data(ticker_list, start, end):
                     df = df.set_index('date')
                     
                 df = df.sort_index()
-                # Ép giá đóng cửa về kiểu số thực Float để tránh lỗi định dạng chuỗi văn bản
+                # Chuyển đổi giá đóng cửa sang kiểu số thực
                 close_prices[ticker] = pd.to_numeric(df['close'], errors='coerce')
         except Exception as e:
             continue
