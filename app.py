@@ -10,7 +10,7 @@ from vnstock import *
 # ==========================================
 st.set_page_config(page_title="Tối Ưu Danh Mục Đa Ngành", layout="wide", page_icon="🏛️")
 st.title("🏛️ Hệ Thống Lọc Cổ Phiếu Đạt Đỉnh Tín Hiệu Theo Từng Nhóm Ngành")
-st.caption("Chiến lược lọc hạt giống hàng đầu của từng lĩnh vực nhằm tối ưu hóa đa dạng hóa cấu trúc vốn và phòng ngừa rủi ro hệ thống.")
+st.caption("Chiến lược lọc hạt giống hàng đầu của từng lĩnh vực nhằm tối ưu hóa cấu trúc vốn và phòng ngừa rủi ro hệ thống.")
 
 # ==========================================
 # 2. ĐỊNH NGHĨA BẢN ĐỒ PHÂN NHÓM NGÀNH TOÀN DIỆN
@@ -23,17 +23,16 @@ SECTOR_MAP = {
     "Bán lẻ - Công nghệ - Tiêu dùng": ['FPT', 'MWG', 'MSN', 'VNM', 'FRT', 'DGW']
 }
 
-# Gom toàn bộ mã để tải một lần
 ALL_TICKERS = []
 for tickers in SECTOR_MAP.values():
     ALL_TICKERS.extend(tickers)
-ALL_TICKERS = list(set(ALL_TICKERS)) # Loại bỏ mã trùng nếu có
+ALL_TICKERS = list(set(ALL_TICKERS))
 
 # ==========================================
 # 3. THANH ĐIỀU HƯỚNG CẤU HÌNH (SIDEBAR)
 # ==========================================
 st.sidebar.header("⚙️ Tham Số Khởi Tạo")
-st.sidebar.success(f"📊 Hệ thống đang quản lý cấu trúc phân lớp gồm {len(SECTOR_MAP)} nhóm ngành chiến lược với tổng số {len(ALL_TICKERS)} mã cổ phiếu tiêu biểu.")
+st.sidebar.success(f"📊 Hệ thống quản lý {len(SECTOR_MAP)} nhóm ngành chiến lược với tổng số {len(ALL_TICKERS)} mã cổ phiếu tiêu biểu.")
 
 rf_annual = st.sidebar.number_input("Lãi suất phi rủi ro/năm (RF)", min_value=0.0, max_value=0.2, value=0.045, step=0.005)
 trading_days = st.sidebar.number_input("Số ngày giao dịch một năm", min_value=100, max_value=300, value=252)
@@ -45,7 +44,11 @@ end_date = st.sidebar.date_input("Ngày kết thúc", datetime(2025, 12, 31))
 st.sidebar.subheader("🎯 Cơ chế phân bổ tỷ trọng")
 strategy_option = st.sidebar.radio(
     "Chọn phương thức chia vốn cho các mã đại diện ngành:", 
-    ["Phân bổ đều (Equal Weight)", "Phân bổ theo trọng số điểm tín hiệu (Score Weight)"]
+    [
+        "Phân bổ đều (Equal Weight)", 
+        "Phân bổ theo trọng số điểm tín hiệu (Score Weight)",
+        "Chiến lược 80-20 (80% vốn dồn cho Top 2 ngành mạnh nhất)"
+    ]
 )
 
 # ==========================================
@@ -88,7 +91,6 @@ def load_stock_data(ticker_list, start, end):
 if st.sidebar.button("🚀 Kích Hoạt Bộ Lọc Phân Lớp Đa Ngành", type="primary"):
     with st.spinner("Đang xử lý thuật toán tối ưu hóa phân lớp..."):
         
-        # Tải dữ liệu toàn bộ rổ mã đa ngành
         df_prices = load_stock_data(ALL_TICKERS, start_date, end_date)
         
         if df_prices.empty or df_prices.shape[1] < 5:
@@ -103,11 +105,9 @@ if st.sidebar.button("🚀 Kích Hoạt Bộ Lọc Phân Lớp Đa Ngành", type
                 
                 current_price = series.iloc[-1]
                 
-                # 1. Tín hiệu Xu hướng (MA20)
                 ma_20 = series.rolling(window=20).mean().iloc[-1]
                 trend_signal = 1 if current_price > ma_20 else 0
                 
-                # 2. Tín hiệu Động lượng (RSI 14)
                 delta = series.diff()
                 gain = (delta.where(delta > 0, 0)).rolling(window=14).mean().iloc[-1]
                 loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean().iloc[-1]
@@ -115,11 +115,9 @@ if st.sidebar.button("🚀 Kích Hoạt Bộ Lọc Phân Lớp Đa Ngành", type
                 rsi = 100 - (100 / (1 + rs))
                 rsi_signal = 1.0 if (45 <= rsi <= 70) else (0.4 if rsi < 45 else 0.1)
                 
-                # 3. Tín hiệu Động năng (Momentum 1 tháng)
                 momentum_1m = (series.iloc[-1] / series.iloc[-20]) - 1 if len(series) >= 20 else 0
                 momentum_signal = 1 if momentum_1m > 0 else 0
                 
-                # Tính tổng điểm
                 total_score = (trend_signal * 0.4) + (rsi_signal * 0.4) + (momentum_signal * 0.2)
                 
                 all_signal_data[ticker] = {
@@ -131,22 +129,17 @@ if st.sidebar.button("🚀 Kích Hoạt Bộ Lọc Phân Lớp Đa Ngành", type
             
             df_all_signals = pd.DataFrame(all_signal_data).T
             
-            # --- BƯỚC 2: PHÂN THEO TỪNG NGÀNH VÀ CHỌN RA MÃ XUẤT SẮC NHẤT (TOP 1 ĐẠI DIỆN NGÀNH) ---
+            # --- BƯỚC 2: CHỌN MÃ ĐỨNG ĐẦU MỖI NGÀNH ---
             st.subheader("🎯 Kết Quả Sàng Lọc Hạt Giống Dẫn Đầu Theo Từng Nhóm Ngành")
             
             selected_portfolio_tickers = []
             selected_scores = []
             portfolio_details = []
             
-            # Duyệt qua từng ngành trong bản đồ phân lớp
             for sector_name, sector_tickers in SECTOR_MAP.items():
-                # Lấy dữ liệu điểm của các mã thuộc ngành hiện tại có trong ma trận giá
                 valid_tickers = [t for t in sector_tickers if t in df_all_signals.index]
-                
                 if valid_tickers:
                     df_sector = df_all_signals.loc[valid_tickers].sort_values(by="Điểm Tín Hiệu", ascending=False)
-                    
-                    # Trích xuất mã đứng đầu ngành (Top 1)
                     top_ticker = df_sector.index[0]
                     top_score = df_sector.iloc[0]["Điểm Tín Hiệu"]
                     
@@ -163,44 +156,58 @@ if st.sidebar.button("🚀 Kích Hoạt Bộ Lọc Phân Lớp Đa Ngành", type
                     })
             
             df_portfolio_report = pd.DataFrame(portfolio_details)
+            # Sắp xếp báo cáo tổng hợp theo thứ tự điểm tín hiệu giảm dần để dễ phân bổ 80-20
+            df_portfolio_report = df_portfolio_report.sort_values(by="Điểm Tín Hiệu Kỹ Thuật", ascending=False).reset_index(drop=True)
             st.dataframe(df_portfolio_report, use_container_width=True)
             
-            # --- BƯỚC 3: PHÂN BỔ VỐN DANH MỤC ĐA NGÀNH (5 MÃ ĐẠI DIỆN) ---
+            # Cập nhật danh sách mã và điểm theo thứ tự đã sắp xếp đỉnh tín hiệu
+            sorted_tickers = df_portfolio_report["Mã Đại Diện Mạnh Nhất"].tolist()
+            sorted_scores = df_portfolio_report["Điểm Tín Hiệu Kỹ Thuật"].tolist()
+            num_assets = len(sorted_tickers)
+            
+            # --- BƯỚC 3: PHÂN BỔ TỶ TRỌNG VỐN LINH HOẠT ---
             st.subheader("📐 Phân Bổ Tỷ Trọng Vốn & Đánh Giá Chỉ Tiêu Quản Trị Hiệu Quả")
             
-            # Tính toán tỷ trọng
-            num_assets = len(selected_portfolio_tickers)
             weights = np.zeros(num_assets)
             
             if strategy_option == "Phân bổ đều (Equal Weight)":
                 weights = np.ones(num_assets) / num_assets
-            else:
-                # Phân bổ theo tỷ trọng điểm tín hiệu
-                total_portfolio_score = sum(selected_scores)
+                
+            elif strategy_option == "Phân bổ theo trọng số điểm tín hiệu (Score Weight)":
+                total_portfolio_score = sum(sorted_scores)
                 if total_portfolio_score > 0:
-                    weights = np.array(selected_scores) / total_portfolio_score
+                    weights = np.array(sorted_scores) / total_portfolio_score
                 else:
                     weights = np.ones(num_assets) / num_assets
-            
+                    
+            elif strategy_option == "Chiến lược 80-20 (80% vốn dồn cho Top 2 ngành mạnh nhất)":
+                # SỬA ĐỔI TẠI ĐÂY: Triển khai nguyên lý Pareto đa ngành
+                if num_assets >= 2:
+                    # 80% vốn chia đều cho 2 mã dẫn đầu tín hiệu thị trường (mỗi mã 40%)
+                    weights[0] = 0.40
+                    weights[1] = 0.40
+                    # 20% vốn còn lại chia đều cho các mã còn lại để giữ tính đa dạng hóa lĩnh vực
+                    remaining_weight = 0.20 / (num_assets - 2)
+                    for j in range(2, num_assets):
+                        weights[j] = remaining_weight
+                else:
+                    weights[0] = 1.0
+
             df_weights = pd.DataFrame({
-                "Mã Đại Diện": selected_portfolio_tickers,
+                "Mã Đại Diện": sorted_tickers,
                 "Ngành": df_portfolio_report["Nhóm Lĩnh Vực"].tolist(),
                 "Tỷ Trọng Phân Bổ Vốn": weights
             })
             
-            # --- BƯỚC 4: TÍNH TOÁN CÁC CHỈ TIÊU HIỆU QUẢ (RETURNS, VOLATILITY, SHARPE) ---
-            df_returns = df_prices[selected_portfolio_tickers].pct_change().dropna()
+            # --- BƯỚC 4: TÍNH TOÁN BACKTEST ---
+            df_returns = df_prices[sorted_tickers].pct_change().dropna()
             portfolio_returns = df_returns.dot(weights)
             cum_returns = (1 + portfolio_returns).cumprod()
             
-            # Annualized Return (Lợi nhuận năm)
             p_mean = portfolio_returns.mean() * trading_days
-            # Annualized Volatility (Độ rủi ro danh mục có tính đến ma trận hiệp biến dòng tiền đa ngành)
             p_std = portfolio_returns.std() * np.sqrt(trading_days)
-            # Sharpe Ratio
             p_sharpe = (p_mean - rf_annual) / p_std if p_std != 0 else 0
             
-            # Hiển thị giao diện kết quả phối hợp
             col1, col2 = st.columns([1, 2])
             
             with col1:
@@ -212,16 +219,16 @@ if st.sidebar.button("🚀 Kích Hoạt Bộ Lọc Phân Lớp Đa Ngành", type
                 st.markdown("##### 📊 Chỉ Số Hiệu Hiệu Quả Tối Ưu")
                 st.metric("Lợi nhuận trung bình năm ($E_R$)", f"{p_mean*100:.2f}%")
                 st.metric("Độ rủi ro danh mục ($\sigma_P$)", f"{p_std*100:.2f}%")
-                st.style = st.metric("Hệ số Sharpe tối ưu ($Sharpe Ratio$)", f"{p_sharpe:.4f}")
+                st.metric("Hệ số Sharpe tối ưu ($Sharpe Ratio$)", f"{p_sharpe:.4f}")
                 
             with col2:
-                st.markdown("##### 📉 Biểu Đồ Đường Tăng Trưởng Tài Sản Tích Lũy Đa Ngành")
+                st.markdown("##### 📉 Biểu Đồ Đường Tăng Trưởng Tài Sản Tích Lũy")
                 fig, ax = plt.subplots(figsize=(10, 5))
-                ax.plot(cum_returns.index, cum_returns.values, color='indigo', lw=2.5, label="Danh Mục Đa Ngành Phòng Ngừa Rủi Ro Hệ Thống")
+                ax.plot(cum_returns.index, cum_returns.values, color='crimson', lw=2.5, label="Đường cong tài sản chiến lược lựa chọn")
                 ax.set_xlabel("Thời Gian Kiểm Thử")
                 ax.set_ylabel("Giá Trị Tài Sản Tích Lũy (Mốc Gốc = 1.0)")
                 ax.grid(True, linestyle='--')
                 ax.legend()
                 st.pyplot(fig)
 else:
-    st.info("💡 Điểm cải tiến lý thuyết: Hệ thống đã thiết lập cấu trúc ma trận phân tầng theo nhóm ngành cốt lõi. Hãy nhấn nút để hệ thống tự động nhặt hạt giống đại diện cấu thành danh mục đa ngành.")
+    st.info("💡 Hệ thống đã được tích hợp đủ 3 phương án phân bổ vốn (Đều, Điểm số, và 80-20 cải tiến). Vui lòng nhấn nút để so sánh.")
