@@ -1,6 +1,6 @@
 streamlit>=1.30.0
 pandas>=2.0.0
-numpy<2.0.0
+numpy>=1.24.0
 matplotlib>=3.7.0
-vnstock==3.0.1
+vnstock3==3.5.3
 scikit-learn>=1.2.0
