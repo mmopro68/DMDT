@@ -1,6 +1,8 @@
-streamlit
+streamlit>=1.30.0
 pandas
 numpy<2.0.0
 matplotlib
+beautifulsoup4
+requests
 vnstock==0.2.8.8
 scikit-learn
