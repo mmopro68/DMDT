@@ -49,7 +49,7 @@ strategy_option = st.sidebar.radio(
 )
 
 # ==========================================
-# 4. HÀM TẢI DỮ LIỆU TỪ VNSTOCK (CẬP NHẬT CHUẨN VNSTOCK V3 ĐỂ SỬA LỖI)
+# 4. HÀM TẢI DỮ LIỆU TỪ VNSTOCK (BẢN ỔN ĐỊNH 0.2.8.8)
 # ==========================================
 @st.cache_data(ttl=3600)
 def load_stock_data(ticker_list, start, end):
@@ -57,29 +57,30 @@ def load_stock_data(ticker_list, start, end):
     end_str = end.strftime('%Y-%m-%d')
     
     close_prices = {}
-    progress_bar = st.progress(0, text="Đang kết nối dữ liệu VNSTOCK V3...")
+    progress_bar = st.progress(0, text="Đang kết nối dữ liệu thị trường...")
     
     for i, ticker in enumerate(ticker_list):
         try:
-            # SỬA LỖI TẠI ĐÂY: Khởi tạo đối tượng Vnstock() trước khi gọi hàm lấy dữ liệu lịch sử
-            df = Vnstock().stock_historical_data(symbol=ticker, start_date=start_str, end_date=end_str, resolution='1D', type='stock')
-            if not df.empty:
-                # Đồng bộ hóa định dạng cột ngày tháng của Vnstock V3
+            # Gọi hàm trực tiếp từ vnstock 0.2.8.8
+            df = stock_historical_data(symbol=ticker, start_date=start_str, end_date=end_str, resolution='1D', type='stock')
+            
+            if df is not None and not df.empty:
                 if 'time' in df.columns:
                     df['time'] = pd.to_datetime(df['time'])
                     df = df.set_index('time')
-                elif 'date' in df.columns:
-                    df['date'] = pd.to_datetime(df['date'])
-                    df = df.set_index('date')
                     
                 df = df.sort_index()
-                # Chuyển đổi giá đóng cửa sang kiểu số thực
                 close_prices[ticker] = pd.to_numeric(df['close'], errors='coerce')
         except Exception as e:
             continue
-        progress_bar.progress((i + 1) / len(ticker_list), text=f"Đang tải dữ liệu mã: {ticker}")
+            
+        progress_bar.progress((i + 1) / len(ticker_list), text=f"Đang tải mã: {ticker}")
     
     progress_bar.empty()
+    
+    if not close_prices:
+        return pd.DataFrame()
+        
     return pd.DataFrame(close_prices).dropna(how='all')
 # ==========================================
 # 5. LOGIC XỬ LÝ CHÍNH KHI BẤM NÚT CHẠY
