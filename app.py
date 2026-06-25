@@ -49,10 +49,11 @@ strategy_option = st.sidebar.radio(
 )
 
 # ==========================================
-# 4. HÀM TẢI DỮ LIỆU TỪ VNSTOCK (CÓ CACHE ĐỂ TĂNG TỐC)
+# 4. HÀM TẢI DỮ LIỆU TỪ VNSTOCK (ĐÃ ĐỒNG BỘ CHO BẢN 3.0.1)
 # ==========================================
 @st.cache_data(ttl=3600)
 def load_stock_data(ticker_list, start, end):
+    # Đổi định dạng ngày sang YYYY-mm-dd phù hợp với vnstock v3
     start_str = start.strftime('%Y-%m-%d')
     end_str = end.strftime('%Y-%m-%d')
     
@@ -61,11 +62,20 @@ def load_stock_data(ticker_list, start, end):
     
     for i, ticker in enumerate(ticker_list):
         try:
+            # Gọi hàm với tham số chuẩn hóa của bản 3.0.1
             df = stock_historical_data(symbol=ticker, start_date=start_str, end_date=end_str, resolution='1D', type='stock')
             if not df.empty:
-                df['time'] = pd.to_datetime(df['time'])
-                df = df.set_index('time').sort_index()
-                close_prices[ticker] = df['close']
+                # Bản 3.0.1 trả về cột ngày có tên là 'time' hoặc 'date'
+                if 'time' in df.columns:
+                    df['time'] = pd.to_datetime(df['time'])
+                    df = df.set_index('time')
+                elif 'date' in df.columns:
+                    df['date'] = pd.to_datetime(df['date'])
+                    df = df.set_index('date')
+                    
+                df = df.sort_index()
+                # Ép kiểu dữ liệu giá đóng cửa về dạng số float
+                close_prices[ticker] = pd.to_numeric(df['close'], errors='coerce')
         except Exception as e:
             continue
         progress_bar.progress((i + 1) / len(ticker_list), text=f"Đang tải dữ liệu mã: {ticker}")
