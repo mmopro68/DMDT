@@ -13,48 +13,54 @@ st.title("🌐 Hệ Thống Phân Lớp Đa Ngành & So Sánh Hiệu Quả Với
 st.caption("Thuật toán định lượng sàng lọc hạt giống Alpha, đo lường Alpha, Beta, Max Drawdown so với thị trường chung và danh mục cơ sở.")
 
 # ==========================================
-# 2. TỰ ĐỘNG TẢI VÀ PHÂN LOẠI NGÀNH ĐỘNG
+# 2. TỰ ĐỘNG TẢI VÀ PHÂN LOẠI NGÀNH TOÀN SÀN HOSE (KHÔNG GIỚI HẠN - CHỐNG BỎ SÓT)
 # ==========================================
 @st.cache_data(ttl=86400)
 def get_dynamic_sector_map():
     try:
+        # Lấy danh sách toàn bộ doanh nghiệp niêm yết từ vnstock
         df_comp = listing_companies()
         if df_comp is not None and not df_comp.empty:
+            # BỘ LỌC CHUẨN: Sàn HOSE, mã cổ phiếu 3 ký tự, thông tin ngành hợp lệ
             df_filtered = df_comp[
                 (df_comp['comGroupCode'] == 'HOSE') & 
                 (df_comp['ticker'].str.len() == 3) & 
                 (df_comp['industryName'].notna())
             ].copy()
             
-            if 'organName' in df_filtered.columns:
-                df_filtered = df_filtered.sort_values(by=['industryName', 'ticker'], ascending=[True, True])
+            # Làm sạch dữ liệu khoảng trắng (nếu có)
+            df_filtered['ticker'] = df_filtered['ticker'].str.strip()
+            df_filtered['industryName'] = df_filtered['industryName'].str.strip()
             
+            # Khởi tạo bản đồ ngành động
             dynamic_map = {}
             grouped = df_filtered.groupby('industryName')
             
             for sector_name, group in grouped:
-                tickers_in_sector = group['ticker'].head(20).tolist() 
-                core_anchors = ['VCB', 'TCB', 'MBB', 'HPG', 'SSI', 'VHM', 'VIC', 'FPT', 'MWG', 'VNM']
-                for anchor in core_anchors:
-                    if anchor in group['ticker'].values and anchor not in tickers_in_sector:
-                        tickers_in_sector.append(anchor)
+                # SỬA ĐỔI QUAN TRỌNG: Lấy TOÀN BỘ mã trong ngành trên sàn HOSE, không dùng .head() giới hạn nữa
+                tickers_in_sector = group['ticker'].unique().tolist()
                 
+                # Chỉ giữ lại các ngành có từ 2 doanh nghiệp trở lên để đảm bảo tính cạnh tranh nội ngành
                 if len(tickers_in_sector) >= 2: 
                     dynamic_map[sector_name] = tickers_in_sector
                     
             return dynamic_map
-    except:
-        pass
+    except Exception as e:
+        st.warning(f"⚠️ Có lỗi khi kết nối API ngành: {str(e)}. Hệ thống chuyển sang rổ danh mục dự phòng chuẩn.")
     
+    # Phương án dự phòng (Fallback) quy mô lớn đầy đủ các mã Bluechips
     return {
-        "Ngân hàng": ['VCB', 'BID', 'CTG', 'TCB', 'MBB', 'VPB', 'ACB'],
-        "Bất động sản": ['VHM', 'VIC', 'VRE', 'NVL', 'PDR', 'KDH'],
-        "Thép & Vật liệu": ['HPG', 'HSG', 'NKG'],
-        "Dịch vụ tài chính (Chứng khoán)": ['SSI', 'VND', 'VCI', 'HCM'],
-        "Bán lẻ & Công nghệ": ['FPT', 'MWG', 'MSN', 'VNM']
+        "Ngân hàng": ['VCB', 'BID', 'CTG', 'TCB', 'MBB', 'VPB', 'ACB', 'STB', 'HDB', 'TPB', 'SHB', 'LPB', 'EIB', 'VIB', 'MSB'],
+        "Bất động sản": ['VHM', 'VIC', 'VRE', 'NVL', 'PDR', 'KDH', 'NLG', 'DXG', 'DIG', 'CEO', 'NHA', 'TCH', 'HDG', 'KBC'],
+        "Thép & Vật liệu": ['HPG', 'HSG', 'NKG', 'VGS', 'HT1', 'BCC'],
+        "Dịch vụ tài chính (Chứng khoán)": ['SSI', 'VND', 'VCI', 'HCM', 'FTS', 'BSI', 'MBS', 'SHS', 'ORS', 'VIX'],
+        "Bán lẻ - Công nghệ - Tiêu dùng": ['FPT', 'MWG', 'MSN', 'VNM', 'FRT', 'DGW', 'SAB', 'BHN', 'PNJ']
     }
 
+# Gọi hàm khởi tạo bản đồ ngành động không định kiến
 DYNAMIC_SECTOR_MAP = get_dynamic_sector_map()
+
+# Tập hợp toàn bộ mã động để chuẩn bị tải dữ liệu giá
 ALL_DYNAMIC_TICKERS = []
 for t_list in DYNAMIC_SECTOR_MAP.values():
     ALL_DYNAMIC_TICKERS.extend(t_list)
@@ -64,15 +70,22 @@ ALL_DYNAMIC_TICKERS = list(set(ALL_DYNAMIC_TICKERS))
 # 3. THANH ĐIỀU HƯỚNG CẤU HÌNH (SIDEBAR)
 # ==========================================
 st.sidebar.header("⚙️ Tham Số Khởi Tạo")
-st.sidebar.success(f"📊 Thuật toán tự động phân lớp {len(DYNAMIC_SECTOR_MAP)} ngành trên HOSE với tổng số {len(ALL_DYNAMIC_TICKERS)} mã cổ phiếu.")
 
-max_sectors_to_scan = st.sidebar.slider("Giới hạn số nhóm ngành quét tối đa", min_value=3, max_value=len(DYNAMIC_SECTOR_MAP), value=min(5, len(DYNAMIC_SECTOR_MAP)))
-selected_sectors = list(DYNAMIC_SECTOR_MAP.keys())[:max_sectors_to_scan]
+# Lựa chọn danh sách ngành muốn quét để giảm tải dung lượng nếu cần
+all_available_sectors = list(DYNAMIC_SECTOR_MAP.keys())
+selected_sectors = st.sidebar.multiselect(
+    "Chọn các nhóm ngành đưa vào mô hình:",
+    options=all_available_sectors,
+    default=all_available_sectors[:5] # Mặc định chọn 5 ngành lớn nhất
+)
 
+# Gộp toàn bộ mã cổ phiếu thuộc các ngành đã chọn lựa
 final_scan_tickers = []
 for s in selected_sectors:
     final_scan_tickers.extend(DYNAMIC_SECTOR_MAP[s])
 final_scan_tickers = list(set(final_scan_tickers))
+
+st.sidebar.success(f"📊 Thuật toán đang bao phủ {len(selected_sectors)} ngành với tổng số {len(final_scan_tickers)} mã cổ phiếu đang niêm yết.")
 
 rf_annual = st.sidebar.number_input("Lãi suất phi rủi ro/năm (RF)", min_value=0.0, max_value=0.2, value=0.045, step=0.005)
 trading_days = st.sidebar.number_input("Số ngày giao dịch một năm", min_value=100, max_value=300, value=252)
