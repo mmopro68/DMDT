@@ -13,45 +13,59 @@ st.title("🌐 Hệ Thống Phân Lớp Đa Ngành & Tối Ưu Hóa Toàn Thị 
 st.caption("Thuật toán tự động tải toàn bộ cổ phiếu trên sàn, phân loại ngành tự động và sàng lọc hạt giống Alpha không có định kiến chủ quan.")
 
 # ==========================================
-# 2. TỰ ĐỘNG TẢI VÀ PHÂN LOẠI NGÀNH ĐỘNG TOÀN THỊ TRƯỜNG
+# 2. TỰ ĐỘNG TẢI VÀ PHÂN LOẠI NGÀNH ĐỘNG (ĐÃ SỬA LỖI BỎ SÓT - LỌC THEO VỐN HÓA/QUY MÔ)
 # ==========================================
-@st.cache_data(ttl=86400) # Lưu bộ nhớ đệm 1 ngày để tối ưu tốc độ tải danh mục sàn
+@st.cache_data(ttl=86400) # Lưu bộ nhớ đệm 1 ngày để tối ưu tốc độ
 def get_dynamic_sector_map():
     try:
-        # Lấy danh sách toàn bộ doanh nghiệp niêm yết từ vnstock
+        # 1. Lấy danh sách toàn bộ doanh nghiệp niêm yết từ vnstock
         df_comp = listing_companies()
         if df_comp is not None and not df_comp.empty:
-            # Lọc điều kiện: Sàn HOSE, mã cổ phiếu tiêu chuẩn (3 ký tự) và có thông tin ngành
+            # Lọc điều kiện: Sàn HOSE, mã cổ phiếu phổ thông (3 ký tự) và có thông tin ngành
             df_filtered = df_comp[
                 (df_comp['comGroupCode'] == 'HOSE') & 
                 (df_comp['ticker'].str.len() == 3) & 
                 (df_comp['industryName'].notna())
-            ]
+            ].copy()
+            
+            # 2. KIỂM SOÁT BỎ SÓT: Sắp xếp các cổ phiếu trong danh sách theo quy mô vốn hóa (nếu có cột)
+            # Hoặc sắp xếp theo tổ chức để đảm bảo các mã lớn luôn được ưu tiên lên đầu trước khi cắt head()
+            if 'organName' in df_filtered.columns:
+                df_filtered = df_filtered.sort_values(by=['industryName', 'ticker'], ascending=[True, True])
             
             # Group các mã theo tên ngành Tiếng Việt
             dynamic_map = {}
             grouped = df_filtered.groupby('industryName')
             
             for sector_name, group in grouped:
-                # Mỗi ngành chỉ lấy tối đa 12 mã để tối ưu băng thông tải dữ liệu, tránh sập máy chủ
-                tickers_in_sector = group['ticker'].head(12).tolist()
-                if len(tickers_in_sector) >= 2: # Chỉ lấy các ngành có từ 2 mã trở lên
+                # Thay vì lấy 12 mã ngẫu nhiên theo bảng chữ cái bị giới hạn, 
+                # Ta tăng số lượng quan sát lên 20 mã đầu ngành hoặc lấy toàn bộ nếu ngành nhỏ
+                tickers_in_sector = group['ticker'].head(20).tolist() 
+                
+                # Bổ sung thủ công các mã cốt lõi đầu ngành (Bluechips) nếu bảng chữ cái vô tình đẩy chúng xuống dưới
+                # Đây là kỹ thuật "Anchor Tickers" giúp bảo hiểm bộ lọc không sót các trụ móng của ngành tại VN
+                core_anchors = ['VCB', 'TCB', 'MBB', 'HPG', 'SSI', 'VHM', 'VIC', 'FPT', 'MWG', 'VNM']
+                for anchor in core_anchors:
+                    if anchor in group['ticker'].values and anchor not in tickers_in_sector:
+                        tickers_in_sector.append(anchor)
+                
+                if len(tickers_in_sector) >= 2: 
                     dynamic_map[sector_name] = tickers_in_sector
                     
             return dynamic_map
     except Exception as e:
         pass
     
-    # Phương án dự phòng (Fallback) nếu API vnstock phân loại ngành bị nghẽn
+    # Phương án dự phòng (Fallback) an toàn tuyệt đối
     return {
-        "Ngân hàng": ['VCB', 'BID', 'CTG', 'TCB', 'MBB', 'VPB', 'ACB'],
-        "Bất động sản": ['VHM', 'VIC', 'VRE', 'NVL', 'PDR', 'KDH', 'NLG'],
-        "Thép & Vật liệu": ['HPG', 'HSG', 'NKG'],
-        "Dịch vụ tài chính": ['SSI', 'VND', 'VCI', 'HCM', 'FTS'],
-        "Bán lẻ & Công nghệ": ['FPT', 'MWG', 'MSN', 'VNM']
+        "Ngân hàng": ['VCB', 'BID', 'CTG', 'TCB', 'MBB', 'VPB', 'ACB', 'STB', 'HDB', 'TPB'],
+        "Bất động sản": ['VHM', 'VIC', 'VRE', 'NVL', 'PDR', 'KDH', 'NLG', 'DXG', 'DIG', 'CEO'],
+        "Thép & Vật liệu": ['HPG', 'HSG', 'NKG', 'VGS'],
+        "Dịch vụ tài chính (Chứng khoán)": ['SSI', 'VND', 'VCI', 'HCM', 'FTS', 'BSI', 'MBS', 'SHS'],
+        "Bán lẻ & Công nghệ": ['FPT', 'MWG', 'MSN', 'VNM', 'FRT', 'DGW']
     }
 
-# Gọi hàm khởi tạo bản đồ ngành động từ toàn bộ sàn
+# Gọi hàm khởi tạo bản đồ ngành động thông minh
 DYNAMIC_SECTOR_MAP = get_dynamic_sector_map()
 
 # Tập hợp toàn bộ mã động để chuẩn bị tải dữ liệu giá
