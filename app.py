@@ -6,14 +6,24 @@ from datetime import datetime
 from vnstock import *
 
 # ==========================================
-# 1. CẤU HÌNH GIAO DIỆN STREAMLIT
+# CẤU HÌNH GIAO DIỆN CHUYÊN NGHIỆP
 # ==========================================
-st.set_page_config(page_title="Tối Ưu Đa Ngành Tinh Chỉnh", layout="wide", page_icon="🚀")
-st.title("🚀 Hệ Thống Tối Ưu Tín Hiệu Dòng Tiền & Động Lượng Tinh Chỉnh (Alpha Max)")
-st.caption("Thuật toán đã được tinh chỉnh: Sử dụng Động lượng liên tục (Percentile Rank) và Bộ lọc xu hướng kép MA20/MA50 nhằm đánh bại VN-Index.")
+st.set_page_config(page_title="Alpha Max Portfolio System", layout="wide", page_icon="📈")
+
+# Tối ưu giao diện bằng CSS tùy chỉnh
+st.markdown("""
+    <style>
+    .block-container {padding-top: 1.5rem; padding-bottom: 1rem;}
+    .stMetric {background-color: #f8f9fa; padding: 10px; border-radius: 5px; border-left: 5px solid #007bff;}
+    .report-card {background-color: #ffffff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 15px;}
+    </style>
+""", unsafe_allow_html=True)
+
+st.title("📈 Hệ Thống Phân Tích Định Lượng & Tối Ưu Hóa Danh Mục Cao Cấp (Alpha Max)")
+st.caption("Phiên bản thuật toán tinh chỉnh nâng cao: Tích hợp Bộ lọc Xu hướng đa tầng và Động lượng điều chỉnh rủi ro nhằm chinh phục VN-Index.")
 
 # ==========================================
-# 2. TỰ ĐỘNG TẢI VÀ PHÂN LOẠI NGÀNH ĐỘNG
+# TỰ ĐỘNG TẢI VÀ PHÂN LOẠI NGÀNH ĐỘNG
 # ==========================================
 @st.cache_data(ttl=86400)
 def get_dynamic_sector_map():
@@ -47,31 +57,50 @@ DYNAMIC_SECTOR_MAP = get_dynamic_sector_map()
 TICKER_TO_SECTOR = {t: s for s, t_list in DYNAMIC_SECTOR_MAP.items() for t in t_list}
 
 # ==========================================
-# 3. THANH ĐIỀU HƯỚNG CẤU HÌNH (SIDEBAR)
+# BỐ CỤC 1 ĐẾN 8: BỘ THAM SỐ ĐẦU VÀO TRÊN SIDEBAR
 # ==========================================
-st.sidebar.header("⚙️ Cấu Hình Tinh Chỉnh")
+st.sidebar.header("⚙️ BẢNG CẤU HÌNH THAM SỐ")
 
+# 1. Lựa chọn nhóm ngành
 all_available_sectors = list(DYNAMIC_SECTOR_MAP.keys())
-selected_sectors = st.sidebar.multiselect("Chọn các nhóm ngành quét:", options=all_available_sectors, default=all_available_sectors[:5])
+selected_sectors = st.sidebar.multiselect(
+    "1. Lựa chọn nhóm ngành quét vốn:", 
+    options=all_available_sectors, 
+    default=all_available_sectors[:5]
+)
 
 final_scan_tickers = []
 for s in selected_sectors: final_scan_tickers.extend(DYNAMIC_SECTOR_MAP[s])
 final_scan_tickers = list(set(final_scan_tickers))
 
-portfolio_size = st.sidebar.slider("Số lượng mã trong danh mục (N)", min_value=5, max_value=10, value=5, step=1)
-max_stocks_per_sector = st.sidebar.slider("Số mã tối đa/ngành (Kiểm soát đa dạng hóa)", min_value=1, max_value=4, value=2)
+# 2 & 3. Định biên số lượng mã danh mục
+portfolio_size = st.sidebar.slider("2. Số lượng mã trong danh mục (N)", min_value=5, max_value=10, value=5, step=1)
+max_stocks_per_sector = st.sidebar.slider("3. Số lượng mã tối đa/ngành", min_value=1, max_value=4, value=2)
 
-rf_annual = st.sidebar.number_input("Lãi suất phi rủi ro (RF)", value=0.045, step=0.005)
-trading_days = st.sidebar.number_input("Số ngày giao dịch/năm", value=252)
+# 4 & 5. Định biên thông số thị trường
+rf_annual = st.sidebar.number_input("4. Lãi suất phi rủi ro (RF)", value=0.045, step=0.005, format="%.3f")
+trading_days = st.sidebar.number_input("5. Số ngày giao dịch/năm", value=252, step=1)
 
-st.sidebar.subheader("📅 Khung Thời Gian Tách Biệt")
-train_start = st.sidebar.date_input("Huấn luyện từ ngày", datetime(2022, 1, 1))
-train_end = st.sidebar.date_input("Huấn luyện đến ngày", datetime(2024, 12, 31))
-test_start = st.sidebar.date_input("Kiểm thử từ ngày", datetime(2025, 1, 1))
-test_end = st.sidebar.date_input("Kiểm thử đến ngày", datetime(2025, 12, 31))
+# 6 & 7. Khung thời gian tách biệt
+st.sidebar.subheader("📅 KHUNG THỜI GIAN KIỂM ĐỊNH")
+train_start = st.sidebar.date_input("6. Ngày bắt đầu huấn luyện", datetime(2022, 1, 1))
+train_end = st.sidebar.date_input("6. Ngày kết thúc huấn luyện", datetime(2024, 12, 31))
+test_start = st.sidebar.date_input("7. Ngày bắt đầu backtest", datetime(2025, 1, 1))
+test_end = st.sidebar.date_input("7. Ngày kết thúc backtest", datetime(2025, 12, 31))
+
+# 8. Lựa chọn phương án phân bổ vốn
+st.sidebar.subheader("🎯 CHIẾN LƯỢC QUẢN TRỊ VỐN")
+strategy_option = st.sidebar.radio(
+    "8. Lựa chọn phương án phân bổ vốn:", 
+    [
+        "Phân bổ đều (Equal Weight)", 
+        "Phân bổ theo trọng số điểm tín hiệu (Score Weight)",
+        "Chiến lược 80-20 (80% vốn tập trung dồn cho Top 2 mã mạnh nhất)"
+    ]
+)
 
 # ==========================================
-# 4. HÀM TẢI VÀ XỬ LÝ DỮ LIỆU
+# HÀM TẢI VÀ XỬ LÝ DỮ LIỆU GỐC
 # ==========================================
 @st.cache_data(ttl=3600)
 def load_all_periods_data(ticker_list, t_start, t_end):
@@ -94,162 +123,202 @@ def load_all_periods_data(ticker_list, t_start, t_end):
     except: pass
     return pd.concat(series_dict, axis=1).sort_index().ffill().bfill() if series_dict else pd.DataFrame()
 
+def calculate_max_drawdown(cum_returns_series):
+    rolling_max = cum_returns_series.cummax()
+    drawdowns = (cum_returns_series - rolling_max) / rolling_max
+    return drawdowns.min()
+
 # ==========================================
-# 5. KÍCH HOẠT TÍNH TOÁN
+# LOGIC THỰC THI CHÍNH
 # ==========================================
-if st.sidebar.button("🚀 Thực Thi Thuật Toán Tinh Chỉnh", type="primary"):
+if st.sidebar.button("🚀 KÍCH HOẠT HỆ THỐNG ALPHA MAX", type="primary"):
     if train_end >= test_start:
-        st.error("❌ Ngày kết thúc huấn luyện phải trước Ngày bắt đầu kiểm thử!")
+        st.error("❌ Lỗi: Ngày kết thúc huấn luyện phải trước Ngày bắt đầu backtest để đảm bảo tính khách quan!")
     else:
-        with st.spinner("Đang trích xuất ma trận Động lượng liên tục..."):
+        with st.spinner("Hệ thống đang quét toàn thị trường và tối ưu hóa ma trận Alpha..."):
             df_train = load_all_periods_data(final_scan_tickers, train_start, train_end)
             
             if df_train.empty:
-                st.error("❌ Không tải được dữ liệu.")
+                st.error("❌ Không trích xuất được dữ liệu giao dịch lịch sử.")
             else:
                 raw_metrics = []
                 stock_cols = [c for c in df_train.columns if c != 'VNINDEX']
                 
-                # Tính toán các chỉ báo thô cho toàn sàn
                 for ticker in stock_cols:
                     series = df_train[ticker].dropna()
-                    if len(series) < 60: continue
+                    if len(series) < 200: continue # Đảm bảo đủ dữ liệu tính toán MA200
                     
                     current_price = series.iloc[-1]
                     ma_20 = series.rolling(window=20).mean().iloc[-1]
                     ma_50 = series.rolling(window=50).mean().iloc[-1]
+                    ma_200 = series.rolling(window=200).mean().iloc[-1]
                     
-                    # TINH CHỈNH 2: Bộ lọc xu hướng kép nghiêm ngặt
-                    trend_valid = 1 if (current_price > ma_20 and current_price > ma_50) else 0
+                    # TINH CHỈNH THUẬT TOÁN CỐT LÕI: Bộ lọc xu hướng dài hạn đa tầng MA200
+                    trend_valid = 1 if (current_price > ma_20 and current_price > ma_50 and current_price > ma_200) else 0
                     
-                    # RSI
+                    # Tính toán RSI
                     delta = series.diff()
                     gain = delta.where(delta > 0, 0).rolling(window=14).mean().iloc[-1]
                     loss = -delta.where(delta < 0, 0).rolling(window=14).mean().iloc[-1]
                     rsi = 100 - (100 / (1 + (gain / (loss + 1e-12))))
-                    rsi_score = 1.0 if (45 <= rsi <= 75) else 0.2
+                    rsi_score = 1.0 if (50 <= rsi <= 70) else 0.1 # Thu hẹp vùng an toàn để chọn mã khỏe hẳn
                     
-                    # TINH CHỈNH 1: Lấy giá trị Động lượng liên tục thô để xếp hạng phần trăm
-                    momentum_1m_raw = (series.iloc[-1] / series.iloc[-20]) - 1 if len(series) >= 20 else -0.99
+                    # TINH CHỈNH THUẬT TOÁN ĐỘNG LƯỢNG: Động lượng điều chỉnh rủi ro (Risk-Adjusted Momentum)
+                    returns_1m = series.pct_change(20).iloc[-1]
+                    volatility_1m = series.pct_change().tail(20).std() + 1e-12
+                    risk_adj_mom = returns_1m / volatility_1m
                     
                     raw_metrics.append({
                         "Ticker": ticker, "Sector": TICKER_TO_SECTOR.get(ticker, "Khác"),
-                        "Price": current_price, "Trend_Valid": trend_valid,
-                        "RSI": rsi, "RSI_Score": rsi_score, "Mom_Raw": momentum_1m_raw
+                        "Price": current_price, "Trend_Valid": trend_valid, "RSI": rsi,
+                        "RSI_Score": rsi_score, "Mom_Raw": risk_adj_mom
                     })
                 
                 df_raw = pd.DataFrame(raw_metrics)
                 
                 if df_raw.empty:
-                    st.error("❌ Không có đủ dữ liệu cổ phiếu hợp lệ.")
+                    st.error("❌ Không tìm thấy cổ phiếu nào vượt qua bộ lọc sơ bộ.")
                 else:
-                    # Chuyển đổi Động lượng thô thành Điểm thứ hạng phần trăm (Percentile Rank từ 0 đến 1)
+                    # Chấm điểm xếp hạng động lượng phần trăm toàn thị trường
                     df_raw["Mom_Score"] = df_raw["Mom_Raw"].rank(pct=True)
-                    
-                    # Tính điểm tổng hợp tinh chỉnh
                     df_raw["Total_Score"] = (df_raw["Trend_Valid"] * 0.4) + (df_raw["Mom_Score"] * 0.4) + (df_raw["RSI_Score"] * 0.2)
                     df_raw = df_raw.sort_values(by="Total_Score", ascending=False)
                     
-                    # Sàng lọc danh mục kết hợp chặn trần rủi ro ngành
+                    # Sàng lọc danh mục theo tiêu chí khắt khe và chống rủi ro hệ thống ngành
                     portfolio_list = []
                     sector_counts = {}
                     
                     for idx, row in df_raw.iterrows():
-                        if row["Trend_Valid"] != 1: continue # Chỉ chọn cổ phiếu Uptrend mạnh
+                        if row["Trend_Valid"] != 1: continue # Loại bỏ thẳng tay các mã gãy xu hướng dài hạn
                         
                         sec = row["Sector"]
                         count = sector_counts.get(sec, 0)
                         if count < max_stocks_per_sector:
                             portfolio_list.append({
-                                "Mã Cổ Phiếu": row["Ticker"], "Nhóm Ngành": sec,
+                                "Hạng": len(portfolio_list) + 1,
+                                "Mã Cổ Phiếu": row["Ticker"], "Nhóm Ngành Lĩnh Vực": sec,
                                 "Giá Chốt HL": row["Price"], "Chỉ Số RSI": round(row["RSI"], 1),
-                                "Hiệu Suất 1M": f"{row['Mom_Raw']*100:.1f}%", "Điểm Tối Ưu": round(row["Total_Score"], 3)
+                                "Điểm Đánh Giá Tín Hiệu": round(row["Total_Score"], 3)
                             })
                             sector_counts[sec] = count + 1
                         if len(portfolio_list) == portfolio_size: break
                     
-                    st.subheader(f"🎯 Danh Mục {len(portfolio_list)} Siêu Cổ Phiếu Dòng Tiền Được Chọn")
-                    df_port = pd.DataFrame(portfolio_list)
-                    st.dataframe(df_port, use_container_width=True, hide_index=True)
-                    
-                    # --- TINH CHỈNH 3: PHÂN BỔ VỐN 80-20 ĐỘNG THEO Pareto NÂNG CAO ---
-                    sorted_tickers = df_port["Mã Cổ Phiếu"].tolist()
-                    sorted_scores = df_port["Điểm Tối Ưu"].tolist()
-                    n_assets = len(sorted_tickers)
-                    
-                    weights = np.zeros(n_assets)
-                    if n_assets >= 2:
-                        # 80% vốn dồn cho Top 2 mã, chia theo tỷ lệ điểm số tương đối của chúng để tối ưu Alpha
-                        sum_top2_score = sorted_scores[0] + sorted_scores[1]
-                        weights[0] = 0.80 * (sorted_scores[0] / sum_top2_score)
-                        weights[1] = 0.80 * (sorted_scores[1] / sum_top2_score)
-                        
-                        # 20% vốn còn lại chia đều cho các mã vệ tinh phía sau
-                        if n_assets > 2:
-                            rem_w = 0.20 / (n_assets - 2)
-                            for j in range(2, n_assets): weights[j] = rem_w
+                    # 9. DANH MỤC CỔ PHIẾU ĐƯỢC CHỌN THEO BỘ LỌC TÍN HIỆU
+                    st.markdown('<div class="report-card">', unsafe_allow_html=True)
+                    st.subheader("📋 9. Danh mục cổ phiếu được chọn theo bộ lọc tín hiệu Alpha Max")
+                    if not portfolio_list:
+                        st.error("❌ Không có cổ phiếu nào thỏa mãn bộ lọc xu hướng dài hạn an toàn.")
+                        st.markdown('</div>', unsafe_allow_html=True)
                     else:
-                        weights[0] = 1.0
-                    
-                    df_w = pd.DataFrame({"Cổ Phiếu": sorted_tickers, "Ngành": df_port["Nhóm Ngành"], "Tỷ Trọng Vốn": [f"{w*100:.2f}%" for w in weights]})
-                    st.markdown("##### 💰 Cơ Cấu Phân Bổ Vốn Pareto Động Đã Tối Ưu:")
-                    st.dataframe(df_w.T, use_container_width=True)
-                    
-                    # --- BACKTEST OUT-OF-SAMPLE (GIAI ĐOẠN 2025 THỰC TẾ) ---
-                    with st.spinner("Đang chạy Backtest Out-of-Sample..."):
+                        df_port = pd.DataFrame(portfolio_list)
+                        st.dataframe(df_port, use_container_width=True, hide_index=True)
+                        st.markdown('</div>', unsafe_allow_html=True)
+                        
+                        sorted_tickers = df_port["Mã Cổ Phiếu"].tolist()
+                        sorted_scores = df_port["Điểm Đánh Giá Tín Hiệu"].tolist()
+                        n_assets = len(sorted_tickers)
+                        
+                        # 10. CƠ CẤU PHÂN BỔ VỐN
+                        st.markdown('<div class="report-card">', unsafe_allow_html=True)
+                        st.subheader("💰 10. Cơ cấu phân bổ tỷ trọng dòng vốn")
+                        
+                        weights = np.zeros(n_assets)
+                        if strategy_option == "Phân bổ đều (Equal Weight)":
+                            weights = np.ones(n_assets) / n_assets
+                        elif strategy_option == "Phân bổ theo trọng số điểm tín hiệu (Score Weight)":
+                            total_s = sum(sorted_scores)
+                            weights = np.array(sorted_scores) / total_s if total_s > 0 else np.ones(n_assets) / n_assets
+                        elif strategy_option == "Chiến lược 80-20 (80% vốn tập trung dồn cho Top 2 mã mạnh nhất)":
+                            if n_assets >= 2:
+                                # Tinh chỉnh: Chia 80% vốn động theo tỷ lệ điểm số tương đối của Top 2 để dồn lực cho mã mạnh nhất
+                                sum_top2 = sorted_scores[0] + sorted_scores[1]
+                                weights[0] = 0.80 * (sorted_scores[0] / sum_top2)
+                                weights[1] = 0.80 * (sorted_scores[1] / sum_top2)
+                                if n_assets > 2:
+                                    rem_w = 0.20 / (n_assets - 2)
+                                    for j in range(2, n_assets): weights[j] = rem_w
+                            else: weights[0] = 1.0
+                        
+                        df_w_display = pd.DataFrame({
+                            "Mã": sorted_tickers, "Ngành": df_port["Nhóm Ngành Lĩnh Vực"],
+                            "Tỷ Trọng Phân Bổ Vốn": [f"{w*100:.2f}%" for w in weights]
+                        })
+                        st.dataframe(df_w_display.T, use_container_width=True)
+                        st.markdown('</div>', unsafe_allow_html=True)
+                        
+                        # 11. ĐÁNH GIÁ HIỆU QUẢ DANH MỤC (BACKTEST OUT-OF-SAMPLE)
+                        st.markdown('<div class="report-card">', unsafe_allow_html=True)
+                        st.subheader("📊 11. Đánh giá hiệu quả danh mục thực tế (Out-of-Sample Backtest 2025)")
+                        
                         df_test = load_all_periods_data(final_scan_tickers, test_start, test_end)
                         
                         if df_test.empty or 'VNINDEX' not in df_test.columns:
-                            st.error("❌ Không lấy được dữ liệu tập kiểm thử năm 2025.")
+                            st.error("❌ Không trích xuất được dữ liệu kiểm thử thực tế của năm 2025.")
                         else:
                             df_test_ret = df_test.pct_change().dropna()
                             
-                            # Tính toán lợi nhuận tích lũy
-                            p_ret = df_test_ret[sorted_tickers].dot(weights)
-                            cum_p = (1 + p_ret).cumprod()
-                            cum_m = (1 + df_test_ret['VNINDEX']).cumprod()
+                            # Tính chuỗi lợi nhuận thực tế
+                            portfolio_ret = df_test_ret[sorted_tickers].dot(weights)
+                            cum_portfolio = (1 + portfolio_ret).cumprod()
+                            
+                            vnindex_ret = df_test_ret['VNINDEX']
+                            cum_vnindex = (1 + vnindex_ret).cumprod()
                             
                             valid_all = [t for t in final_scan_tickers if t in df_test_ret.columns]
-                            b_ret = df_test_ret[valid_all].dot(np.ones(len(valid_all)) / len(valid_all))
-                            cum_b = (1 + b_ret).cumprod()
+                            base_weights = np.ones(len(valid_all)) / len(valid_all)
+                            base_ret = df_test_ret[valid_all].dot(base_weights)
+                            cum_base = (1 + base_ret).cumprod()
                             
-                            # Thống kê định lượng
-                            p_ann = p_ret.mean() * trading_days
-                            m_ann = df_test_ret['VNINDEX'].mean() * trading_days
-                            b_ann = b_ret.mean() * trading_days
+                            # Tính toán các chỉ tiêu định lượng năm
+                            p_ann = portfolio_ret.mean() * trading_days
+                            m_ann = vnindex_ret.mean() * trading_days
+                            b_ann = base_ret.mean() * trading_days
                             
-                            p_sd = p_ret.std() * np.sqrt(trading_days)
-                            m_sd = df_test_ret['VNINDEX'].std() * np.sqrt(trading_days)
-                            b_sd = b_ret.std() * np.sqrt(trading_days)
+                            p_sd = portfolio_ret.std() * np.sqrt(trading_days)
+                            m_sd = vnindex_ret.std() * np.sqrt(trading_days)
+                            b_sd = base_ret.std() * np.sqrt(trading_days)
                             
-                            p_sh = (p_ann - rf_annual) / p_sd if p_sd != 0 else 0
-                            m_sh = (m_ann - rf_annual) / m_sd if m_sd != 0 else 0
-                            b_sh = (b_ann - rf_annual) / b_sd if b_sd != 0 else 0
+                            p_sharpe = (p_ann - rf_annual) / (p_sd + 1e-12)
+                            m_sharpe = (m_ann - rf_annual) / (m_sd + 1e-12)
+                            b_sharpe = (b_ann - rf_annual) / (b_sd + 1e-12)
                             
-                            beta = p_ret.cov(df_test_ret['VNINDEX']) / df_test_ret['VNINDEX'].var()
-                            alpha = p_ann - (rf_annual + beta * (m_ann - rf_annual))
+                            p_max_dd = calculate_max_drawdown(cum_portfolio)
+                            m_max_dd = calculate_max_drawdown(cum_vnindex)
+                            b_max_dd = calculate_max_drawdown(cum_base)
                             
-                            # Hiển thị Ma trận kết quả
-                            st.subheader("📐 Ma Trận Đánh Giá Hiệu Quả Sau Khi Tinh Chỉnh Thuật Toán")
-                            df_metrics = pd.DataFrame({
-                                "Chỉ tiêu định lượng": ["Lợi nhuận TB năm", "Độ biến động rủi ro", "Hệ số Sharpe Ratio"],
-                                "DANH MỤC TINH CHỈNH (ALPHA MAX)": [f"{p_ann*100:.2f}%", f"{p_sd*100:.2f}%", f"{p_sh:.4f}"],
-                                "Chiến lược cơ sở (Buy & Hold)": [f"{b_ann*100:.2f}%", f"{b_sd*100:.2f}%", f"{b_sh:.4f}"],
-                                "Thị Trường Chung (VN-Index)": [f"{m_ann*100:.2f}%", f"{m_sd*100:.2f}%", f"{m_sh:.4f}"]
+                            # Tính hệ số Alpha và Beta theo CAPM
+                            cov_m = portfolio_ret.cov(vnindex_ret)
+                            var_m = vnindex_ret.var()
+                            beta_val = cov_m / var_m if var_m != 0 else 1.0
+                            alpha_jensen = p_ann - (rf_annual + beta_val * (m_ann - rf_annual))
+                            
+                            # Hiển thị Metrics dạng khối chuyên nghiệp
+                            c_m1, c_m2, c_m3, c_m4 = st.columns(4)
+                            with c_m1: st.metric("Lợi nhuận Danh mục Tinh chỉnh", f"{p_ann*100:.2f}%", delta=f"{(p_ann - m_ann)*100:.2f}% vs Index")
+                            with c_m2: st.metric("Chỉ số Sharpe Ratio (Chiến lược)", f"{p_sharpe:.4f}")
+                            with c_m3: st.metric("Alpha Jensen Thặng dư", f"{alpha_jensen*100:.2f}%")
+                            with c_m4: st.metric("Mức sụt giảm lớn nhất (Max DD)", f"{p_max_dd*100:.2f}%")
+                            
+                            # Bảng so sánh chi tiết giữa 3 phương án
+                            df_metrics_final = pd.DataFrame({
+                                "Chỉ tiêu kiểm thử thực nghiệm (2025)": ["Lợi nhuận TB năm ($E_R$)", "Độ rủi ro biến động ($\sigma$)", "Hệ số Sharpe", "Sụt giảm tài sản tối đa (Max DD)"],
+                                "DANH MỤC TINH CHỈNH ĐẠT ALPHA": [f"{p_ann*100:.2f}%", f"{p_sd*100:.2f}%", f"{p_sharpe:.4f}", f"{p_max_dd*100:.2f}%"],
+                                "Chiến lược cơ sở (Buy & Hold Toàn rổ)": [f"{b_ann*100:.2f}%", f"{b_sd*100:.2f}%", f"{b_sharpe:.4f}", f"{b_max_dd*100:.2f}%"],
+                                "Thị Trường Chung (VN-Index)": [f"{m_ann*100:.2f}%", f"{m_sd*100:.2f}%", f"{m_sharpe:.4f}", f"{m_max_dd*100:.2f}%"]
                             })
+                            st.markdown("---")
+                            st.dataframe(df_metrics_final, use_container_width=True, hide_index=True)
                             
-                            c1, c2 = st.columns([3, 2])
-                            with c1: st.dataframe(df_metrics, use_container_width=True, hide_index=True)
-                            with c2:
-                                st.metric("Chỉ số Thặng dư Alpha thực tế", f"{alpha*100:.2f}%", help="Mức vượt trội tuyệt đối của chiến lược so với kỳ vọng rủi ro.")
-                                st.metric("Hệ số biến động Beta", f"{beta:.2f}")
-                            
-                            # Biểu đồ tài sản
+                            # Biểu đồ tăng trưởng tài sản
+                            st.markdown("##### 📉 Biểu đồ tăng trưởng tài sản tích lũy thực tế công khai (Out-of-Sample Performance)")
                             fig, ax = plt.subplots(figsize=(12, 5))
-                            ax.plot(cum_p.index, cum_p.values, color='crimson', lw=2.5, label="Danh Mục Tinh Chỉnh (Alpha Max)")
-                            ax.plot(cum_b.index, cum_b.values, color='orange', lw=1.5, linestyle='--', label="Chiến Lược Cơ Sở")
-                            ax.plot(cum_m.index, cum_m.values, color='black', lw=1.5, alpha=0.6, label="Thị Trường Chung (VN-Index)")
-                            ax.set_title("So Sánh Tài Sản Tích Lũy Sau Tinh Chỉnh (Out-of-Sample)")
+                            ax.plot(cum_portfolio.index, cum_portfolio.values, color='#008080', lw=2.5, label="Chiến lược Tinh chỉnh Alpha Max (Đã tối ưu)")
+                            ax.plot(cum_base.index, cum_base.values, color='#FFA500', lw=1.5, linestyle='--', label="Chiến lược Cơ sở")
+                            ax.plot(cum_vnindex.index, cum_vnindex.values, color='#2F4F4F', lw=1.5, alpha=0.5, label="Thị Trường Chung (VN-Index)")
+                            ax.set_ylabel("Giá trị tài sản tích lũy (Gốc = 1.0)")
                             ax.grid(True, linestyle=':')
                             ax.legend()
                             st.pyplot(fig)
+                        st.markdown('</div>', unsafe_allow_html=True)
+else:
+    st.info("💡 Hệ thống đã được nâng cấp sang cấu trúc thuật toán Alpha Max thế hệ mới. Vui lòng thiết lập cấu hình tham số đầu vào bên trái và bấm nút Khởi chạy.")
